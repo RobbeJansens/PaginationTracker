@@ -5,6 +5,11 @@
 
 import StatefulUI
 
+public protocol AsyncPaginationTrackerDelegate: AnyObject {
+	func didStartLoading()
+	func didEndLoading(error: Error?)
+}
+
 @available(iOS 13, *)
 public final class AsyncPaginationTrackerWithContext<Page: PaginationPage, ContextObject> {
 	public typealias PaginationContext = PaginationContextWithObject<Page, ContextObject>
@@ -13,6 +18,8 @@ public final class AsyncPaginationTrackerWithContext<Page: PaginationPage, Conte
 	private let manager: AsyncPaginationTrackerManager<Page, ContextObject>
 	public weak var statefulController: StatefulViewController?
 
+	public weak var delegate: AsyncPaginationTrackerDelegate?
+
 	/// Create a pagination tracker with the given callback for loading data.
 	///
 	/// - Parameter nextPageCall: Callback for loading the next page.
@@ -20,10 +27,11 @@ public final class AsyncPaginationTrackerWithContext<Page: PaginationPage, Conte
 	/// - Parameter statefulController: The controller that'll display the loading/empty state
 	/// - Parameter pageSize: The size of a page, will be used to calculate when the next page should be loaded.
 	/// - seealso: `NextPageCall`
-	public init(nextPageCall: @escaping NextPageCall, contextObject: ContextObject, statefulController: StatefulViewController? = nil, pageSize: Int = 10) {
+	public init(nextPageCall: @escaping NextPageCall, contextObject: ContextObject, statefulController: StatefulViewController? = nil, pageSize: Int = 10, delegate: AsyncPaginationTrackerDelegate? = nil) {
 		defer { Task { await manager.setup(delegate: self) } }
 		manager = .init(nextPageCall: nextPageCall, contextObject: contextObject, pageSize: pageSize)
 		self.statefulController = statefulController
+		self.delegate = delegate
 	}
 }
 
@@ -66,12 +74,14 @@ extension AsyncPaginationTrackerWithContext: AsyncPaginationTrackerManagerDelega
 	func startLoading() {
 		Task { @MainActor [weak self] in
 			self?.statefulController?.startLoading()
+			self?.delegate?.didStartLoading()
 		}
 	}
 
 	func endLoading(error: Error?) {
 		Task { @MainActor [weak self] in
 			self?.statefulController?.endLoading(error: error)
+			self?.delegate?.didEndLoading(error: error)
 		}
 	}
 }
@@ -89,7 +99,7 @@ public extension AsyncPaginationTrackerWithContext where ContextObject == Void {
 	/// - Parameter statefulController: The controller that'll display the loading/empty state
 	/// - Parameter pageSize: The size of a page, will be used to calculate when the next page should be loaded.
 	/// - seealso: `NextPageCall`
-	convenience init(nextPageCall: @escaping NextPageCall, statefulController: StatefulViewController? = nil, pageSize: Int = 10) {
-		self.init(nextPageCall: nextPageCall, contextObject: (), statefulController: statefulController, pageSize: pageSize)
+	convenience init(nextPageCall: @escaping NextPageCall, statefulController: StatefulViewController? = nil, pageSize: Int = 10, delegate: AsyncPaginationTrackerDelegate? = nil) {
+		self.init(nextPageCall: nextPageCall, contextObject: (), statefulController: statefulController, pageSize: pageSize, delegate: delegate)
 	}
 }
